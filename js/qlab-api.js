@@ -222,13 +222,26 @@
 
   /* ---------- 학생 ---------- */
   const students = {
+    // 내 수강 기록 한 줄.
+    //   한 학생이 여러 학급에 등록될 수 있으므로, '지금 들어와 있는 학급' 의
+    //   줄을 서버가 골라 줍니다. (get_my_student)
+    //   창고에 09_updates.sql 을 아직 안 돌렸다면 예전 방식으로 물러납니다.
     async me() {
       const { data: s } = await sb.auth.getSession();
       if (!s.session) return null;
-      const { data, error } = await sb.from("students")
-        .select("*").eq("auth_uid", s.session.user.id).maybeSingle();
-      fail(error);
-      return data;
+      const { data, error } = await sb.rpc("get_my_student");
+      if (!error) return data || null;
+      console.warn("get_my_student 없음 - 예전 방식으로 읽습니다.", error);
+      const res = await sb.from("students")
+        .select("*").eq("auth_uid", s.session.user.id)
+        .order("id", { ascending: false }).limit(1);
+      fail(res.error);
+      return (res.data && res.data[0]) || null;
+    },
+    // 학급을 옮길 때 '지금 학급' 을 서버에 알려 줍니다.
+    async setActiveSession(sessionId) {
+      const { error } = await sb.rpc("set_active_session", { p_session: sessionId });
+      if (error) console.warn("set_active_session 실패", error);
     },
     async listForTeacher(sessionId) {
       const { data, error } = await sb.rpc("get_session_students", { p_session: sessionId });
